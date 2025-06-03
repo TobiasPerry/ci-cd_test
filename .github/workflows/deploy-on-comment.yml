@@ -1,0 +1,47 @@
+name: Deploy to Render on PR Comment
+
+on:
+  issue_comment:
+    types: [created] # Only when a new comment is created
+
+jobs:
+  deploy-to-render:
+    # This job only runs if:
+    # 1. The comment is on a Pull Request (not a regular issue).
+    # 2. The comment body contains the specific trigger phrase.
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/deploy-to-dev')
+
+    runs-on: ubuntu-latest # The runner where the job will execute
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Trigger Render Deploy # Triggers the deployment on Render
+        uses: ttskch/render-deploy@v1.0.0
+        with:
+          service-id: ${{ secrets.RENDER_DEV_SERVICE_ID }} # The ID of your Render Dev/Test service
+          api-key: ${{ secrets.RENDER_API_KEY }} # Your Render API key (from GitHub secrets)
+
+      - name: Deployment Status (Success)
+        if: success()
+        run: |
+          echo "Deployment to Dev triggered successfully from PR comment!"
+          echo "You can access the deployed application at: ${{ secrets.RENDER_DEV_URL }}"
+
+      - name: Add Deployment URL to PR Comment
+        if: success() && github.event.issue.pull_request
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            🚀 Successful deployment to Dev env!
+            You can access the app from here: ${{ secrets.RENDER_DEV_URL }}
+
+      - name: Deployment Status (Failure)
+        if: failure()
+        run: |
+          echo "Failed to trigger deployment to Render. Check workflow logs for details."
